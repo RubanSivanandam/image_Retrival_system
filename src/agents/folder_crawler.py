@@ -1,6 +1,6 @@
-"""Folder crawler agent for scanning image directories."""
+"""Folder crawler agent using free framework."""
 
-from crewai import Agent
+from ..agent_framework import Agent, Tool
 from ..tools.image_tools import scan_images
 
 def crawler():
@@ -8,8 +8,8 @@ def crawler():
     return Agent(
         role="Image Directory Crawler",
         goal="Scan directories and locate all supported image files",
-        backstory="You are an expert file system navigator with years of experience in efficiently scanning directories and identifying image files. You have a keen eye for finding all image formats and organizing file paths systematically.",
-        tools=[scan_images],
+        backstory="You are an expert file system navigator with years of experience in efficiently scanning directories and identifying image files.",
+        tools=[Tool("scan_images", scan_images, "Scan directory for image files")],
         verbose=True,
         allow_delegation=False
     )

@@ -8,7 +8,7 @@ from .vector_tools import build_index, similarity_search
 
 __all__ = [
     "scan_images",
-    "embed_batch",
+    "embed_batch", 
     "parse_query",
     "build_index",
     "similarity_search"

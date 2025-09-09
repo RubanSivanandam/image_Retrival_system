@@ -7,13 +7,11 @@ from pathlib import Path
 from typing import Optional
 import numpy as np
 import faiss
-from crewai.tools import tool
 from src.config.settings import *
 
 # Configure logging
 log = logging.getLogger(__name__)
 
-@tool("build_index")
 def build_index(data_json: str) -> str:
     """
     Build a FAISS index from embeddings and save metadata.
@@ -84,7 +82,6 @@ def build_index(data_json: str) -> str:
         log.error(f"Error building index: {e}")
         return json.dumps({"error": f"Failed to build index: {e}"})
 
-@tool("similarity_search")
 def similarity_search(query_json: str) -> str:
     """
     Perform similarity search using FAISS index.

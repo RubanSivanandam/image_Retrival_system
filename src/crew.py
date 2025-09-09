@@ -1,8 +1,8 @@
 """
-Main CrewAI orchestrator for the image retrieval system.
+Main crew orchestrator using free agent framework.
 """
 import logging
-from crewai import Crew, Task, Process
+from .agent_framework import Crew, Task
 from .agents.folder_crawler import crawler
 from .agents.image_processor import processor
 from .agents.vector_indexer import indexer
@@ -10,32 +10,17 @@ from .agents.query_parser import parser
 from .agents.similarity_matcher import matcher
 from .config.settings import *
 
-# Configure logging
 log = logging.getLogger(__name__)
 
 class RetrievalCrew:
-    """
-    Main orchestrator class for the image retrieval system.
-    Manages both index building and search operations.
-    """
+    """Main orchestrator class using free agents."""
     
     def __init__(self, img_dir: str = str(IMAGES_DIR)):
-        """
-        Initialize the retrieval crew.
-        
-        Args:
-            img_dir (str): Path to the images directory
-        """
         self.img_dir = img_dir
         log.info(f"Initialized RetrievalCrew with image directory: {img_dir}")
     
     def build_index(self):
-        """
-        Build the image index using a sequential crew workflow.
-        
-        Returns:
-            str: Result of the index building process
-        """
+        """Build the image index using free agent crew."""
         try:
             log.info("Starting index building process...")
             
@@ -44,7 +29,7 @@ class RetrievalCrew:
             processor_agent = processor()
             indexer_agent = indexer()
             
-            # Define tasks for index building - FIXED initialization
+            # Define tasks
             crawl_task = Task(
                 description=f"Scan the directory {self.img_dir} and find all supported image files. Return a JSON list of image paths with total count.",
                 expected_output="JSON list of image paths with total count",
@@ -65,11 +50,10 @@ class RetrievalCrew:
                 context=[embed_task]
             )
             
-            # Create and execute the indexing crew
+            # Create and execute crew
             indexing_crew = Crew(
                 agents=[crawler_agent, processor_agent, indexer_agent],
                 tasks=[crawl_task, embed_task, index_task],
-                process=Process.sequential,
                 verbose=True
             )
             
@@ -82,15 +66,7 @@ class RetrievalCrew:
             raise RuntimeError(f"Failed to build index: {e}")
     
     def search(self, query: str):
-        """
-        Search for images similar to the given query.
-        
-        Args:
-            query (str): Natural language search query
-            
-        Returns:
-            str: JSON string with search results
-        """
+        """Search for images using free agent crew."""
         try:
             log.info(f"Starting search for query: '{query}'")
             
@@ -101,7 +77,7 @@ class RetrievalCrew:
             parser_agent = parser()
             matcher_agent = matcher()
             
-            # Define tasks for search - FIXED initialization
+            # Define tasks
             parse_task = Task(
                 description=f"Parse the natural language query '{query}' and convert it to a CLIP text embedding with extracted semantic features.",
                 expected_output="JSON with query embedding and extracted features",
@@ -115,11 +91,10 @@ class RetrievalCrew:
                 context=[parse_task]
             )
             
-            # Create and execute the search crew
+            # Create and execute crew
             search_crew = Crew(
                 agents=[parser_agent, matcher_agent],
                 tasks=[parse_task, search_task],
-                process=Process.sequential,
                 verbose=False
             )
             

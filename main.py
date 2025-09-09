@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Main entry point for the CrewAI Garment Image Retrieval System
+Main entry point for the Free Open-Source Garment Image Retrieval System
 """
 import argparse
 import json
@@ -24,7 +24,7 @@ except ImportError as e:
 def main():
     """Main function to handle command line arguments and execute crew operations."""
     parser = argparse.ArgumentParser(
-        description="CrewAI Garment Image Retrieval System",
+        description="Free Open-Source Garment Image Retrieval System",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -34,24 +34,10 @@ Examples:
         """
     )
     
-    parser.add_argument(
-        "--index", 
-        action="store_true", 
-        help="Build the image index from the images directory"
-    )
-    
-    parser.add_argument(
-        "query", 
-        nargs="*", 
-        help="Search query (e.g., 'red dress', 'blue jeans')"
-    )
-    
-    parser.add_argument(
-        "--images-dir",
-        type=str,
-        default=str(IMAGES_DIR),
-        help=f"Path to images directory (default: {IMAGES_DIR})"
-    )
+    parser.add_argument("--index", action="store_true", help="Build the image index from the images directory")
+    parser.add_argument("query", nargs="*", help="Search query")
+    parser.add_argument("--images-dir", type=str, default=str(IMAGES_DIR), 
+                       help=f"Path to images directory (default: {IMAGES_DIR})")
     
     args = parser.parse_args()
     
@@ -60,7 +46,7 @@ Examples:
         crew = RetrievalCrew(img_dir=args.images_dir)
         
         if args.index:
-            print("Building image index...")
+            print("Building image index using free AI agents...")
             result = crew.build_index()
             print("Index building completed!")
             return
@@ -72,7 +58,7 @@ Examples:
             
         # Perform search
         query_text = " ".join(args.query)
-        print(f"Searching for: '{query_text}'")
+        print(f"Searching for: '{query_text}' using free AI agents...")
         
         result = crew.search(query_text)
         
@@ -84,9 +70,17 @@ Examples:
                 data = result
                 
             if "results" in data:
-                print("\nSearch Results:")
-                print("=" * 50)
-                pprint.pp(data["results"])
+                print("\n" + "="*50)
+                print("SEARCH RESULTS:")
+                print("="*50)
+                for i, item in enumerate(data["results"], 1):
+                    print(f"\n{i}. {item.get('filename', 'Unknown')}")
+                    print(f"   Path: {item.get('path', 'Unknown')}")
+                    print(f"   Similarity: {item.get('similarity_score', 0):.3f}")
+                    if item.get('dimensions'):
+                        print(f"   Dimensions: {item['dimensions']}")
+                    if item.get('category'):
+                        print(f"   Category: {item['category']}")
             else:
                 print("Results:")
                 pprint.pp(data)

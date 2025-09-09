@@ -13,7 +13,6 @@ from PIL import Image, ExifTags, ImageFile
 from sklearn.cluster import KMeans
 import torch
 from transformers import CLIPProcessor, CLIPModel
-from crewai.tools import tool
 from src.config.settings import *
 
 # Enable loading of truncated images
@@ -82,9 +81,8 @@ def _yolo_category(path: str) -> str:
         log.warning(f"YOLO classification failed for {path}: {e}")
         return "unknown"
 
-# --------- tools --------------------------------------------------------
+# --------- TOOL FUNCTIONS (NO DECORATORS) --------------------------------
 
-@tool("scan_images")
 def scan_images(directory: str = str(IMAGES_DIR)) -> str:
     """
     Scan directory recursively for supported image files.
@@ -121,7 +119,6 @@ def scan_images(directory: str = str(IMAGES_DIR)) -> str:
         log.error(f"Error scanning directory {directory}: {e}")
         return json.dumps({"error": f"Failed to scan directory: {e}"})
 
-@tool("embed_batch")
 def embed_batch(batch_json: str) -> str:
     """
     Generate CLIP embeddings and metadata for a batch of images.
