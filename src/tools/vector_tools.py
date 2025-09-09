@@ -58,3 +58,10 @@ def similarity_search(query_json: str) -> str:
         results.append(m)
         if len(results) == k: break
     return json.dumps({"results": results[:k]})
+@tool("parse_query")
+def parse_query(query: str) -> str:
+    """
+    Parses a natural language query string.
+    You can expand this to do NLP preprocessing, tokenization, etc.
+    """
+    return query.strip()
