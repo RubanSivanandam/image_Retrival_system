@@ -1,0 +1,103 @@
+# Python-specific
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+*.venv/
+*.env/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# System files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Machine learning and model files
+*.pt
+*.pth
+*.onnx
+*.h5
+model/
+models/
+checkpoints/
+*.bin
+*.index
+*.faiss
+*.pkl
+
+# Data and temporary files
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.sqlite
+*.db
+data/
+dataset/
+images/
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.npy
+*.npz
+tmp/
+temp/
+cache/
+*.cache
+
+# Logs and outputs
+*.log
+logs/
+output/
+outputs/
+*.out
+*.err
+
+# Environment and configuration
+.env
+.env.local
+*.env.*
+config.json
+secrets.json
+credentials.json
+*.key
+*.pem
+*.crt
+
+# Notebooks and temporary analysis files
+*.ipynb
+*.ipynb_checkpoints/
+notebooks/
+
+# Package manager lock files
+Pipfile.lock
+poetry.lock
+
+# OS-specific
+*.swp
+*~
+
+# Project-specific (customize as needed)
+index.faiss
+metadata.json
+IMAGES_DIR/
+INDEX_FILE
+META_FILE

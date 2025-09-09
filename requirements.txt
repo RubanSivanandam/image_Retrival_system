@@ -1,0 +1,10 @@
+crewai>=0.130.0
+crewai[tools]
+torch>=2.2
+transformers>=4.41
+sentence-transformers>=2.7
+faiss-cpu>=1.8
+Pillow>=10.3
+ultralytics>=8.2
+scikit-learn>=1.5
+tqdm>=4.66
