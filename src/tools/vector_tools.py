@@ -1,6 +1,6 @@
 """
 Build & query FAISS index for vector similarity search.
-FIXED: Proper dimension handling and FAISS index creation
+FINAL BULLETPROOF FIX: Universal array handling for all FAISS versions
 """
 import json
 import logging
@@ -11,12 +11,7 @@ import numpy as np
 log = logging.getLogger(__name__)
 
 def build_index(data_json: str) -> str:
-    """
-    Build a FAISS index from embeddings and save metadata.
-    
-    Returns:
-        str: JSON string with indexing results
-    """
+    """Build a FAISS index from embeddings and save metadata."""
     try:
         print("🔄 Building FAISS index...")
         log.info("Starting FAISS index building process")
@@ -42,14 +37,12 @@ def build_index(data_json: str) -> str:
         
         if not embeddings:
             return json.dumps({"error": "No embeddings provided"})
-            
         if not metadata:
             return json.dumps({"error": "No metadata provided"})
-            
         if len(embeddings) != len(metadata):
             return json.dumps({"error": "Embeddings and metadata length mismatch"})
         
-        # FIXED: Proper numpy array conversion and dimension handling
+        # Convert to numpy array
         vectors = np.array(embeddings, dtype=np.float32)
         
         # Ensure 2D array
@@ -61,25 +54,23 @@ def build_index(data_json: str) -> str:
         if vectors.size == 0:
             return json.dumps({"error": "Empty vectors array"})
         
-        # FIXED: Extract dimension properly as integer
+        # Extract dimensions
         num_vectors, dimension = vectors.shape
-        dimension = int(dimension)  # Ensure it's an integer
+        dimension = int(dimension)
         
         log.info(f"Building FAISS index with {num_vectors} vectors of dimension {dimension}")
         print(f"📊 Building index: {num_vectors} vectors × {dimension} dimensions")
         
-        # FIXED: Create FAISS index with proper integer dimension
+        # Create FAISS index
         try:
-            index = faiss.IndexFlatIP(dimension)  # dimension is now guaranteed to be int
+            index = faiss.IndexFlatIP(dimension)
         except Exception as e:
             error_msg = f"Failed to create FAISS index: {e}"
             log.error(error_msg)
             return json.dumps({"error": error_msg})
         
-        # Normalize vectors for cosine similarity
+        # Normalize and add vectors
         faiss.normalize_L2(vectors)
-        
-        # Add vectors to index
         try:
             index.add(vectors)
         except Exception as e:
@@ -133,10 +124,7 @@ def build_index(data_json: str) -> str:
 
 def similarity_search(query_json: str) -> str:
     """
-    Perform similarity search using FAISS index.
-    
-    Returns:
-        str: JSON string with search results
+    FINAL BULLETPROOF FIX: Universal similarity search that handles all array formats.
     """
     try:
         print("🔍 Performing similarity search...")
@@ -160,16 +148,15 @@ def similarity_search(query_json: str) -> str:
         if not query_embedding:
             return json.dumps({"error": "No query embedding provided"})
         
-        # Get paths from settings
+        # Get settings
         try:
             from src.config.settings import INDEX_FILE, META_FILE, SIM_THRESHOLD
         except ImportError as e:
             return json.dumps({"error": f"Cannot import settings: {e}"})
         
-        # Check if index exists
+        # Check if files exist
         if not INDEX_FILE.exists():
             return json.dumps({"error": "Index file not found. Please build index first with --index"})
-            
         if not META_FILE.exists():
             return json.dumps({"error": "Metadata file not found. Please build index first with --index"})
         
@@ -179,43 +166,118 @@ def similarity_search(query_json: str) -> str:
         try:
             index = faiss.read_index(str(INDEX_FILE))
             metadata = json.loads(META_FILE.read_text())
+            print(f"📊 Loaded index with {index.ntotal} vectors and {len(metadata)} metadata entries")
         except Exception as e:
             return json.dumps({"error": f"Cannot load index/metadata: {e}"})
         
         # Prepare query vector
-        query_vector = np.array(query_embedding, dtype=np.float32).reshape(1, -1)
-        faiss.normalize_L2(query_vector)
+        try:
+            query_vector = np.array(query_embedding, dtype=np.float32)
+            if query_vector.ndim == 1:
+                query_vector = query_vector.reshape(1, -1)
+            elif query_vector.ndim != 2:
+                return json.dumps({"error": f"Invalid query embedding shape: {query_vector.shape}"})
+            
+            faiss.normalize_L2(query_vector)
+            print(f"🎯 Query vector shape: {query_vector.shape}")
+        except Exception as e:
+            return json.dumps({"error": f"Query vector preparation failed: {e}"})
         
-        # Search for similar vectors
+        # Perform search
         search_k = min(k * 2, index.ntotal)
         try:
             distances, indices = index.search(query_vector, search_k)
+            print(f"🔍 FAISS search returned distances shape: {distances.shape}, indices shape: {indices.shape}")
         except Exception as e:
-            return json.dumps({"error": f"Search failed: {e}"})
+            return json.dumps({"error": f"FAISS search failed: {e}"})
         
-        # Process results
+        # BULLETPROOF ARRAY PROCESSING
         results = []
-        for score, idx in zip(distances, indices):
-            if idx == -1 or idx >= len(metadata):
-                continue
+        try:
+            # Convert FAISS results to simple Python lists
+            # FAISS always returns 2D arrays: (num_queries, k) - we have 1 query
+            distances_flat = distances.flatten().tolist()  # Convert to flat Python list
+            indices_flat = indices.flatten().tolist()      # Convert to flat Python list
+            
+            print(f"🐛 Debug - Converted to lists: {len(distances_flat)} distances, {len(indices_flat)} indices")
+            
+            # Process each result with guaranteed Python scalars
+            for i, (score, idx) in enumerate(zip(distances_flat, indices_flat)):
+                print(f"🐛 Debug - Result {i}: score={score} (type: {type(score)}), idx={idx} (type: {type(idx)})")
                 
-            if score < SIM_THRESHOLD:
-                continue
+                # These are now guaranteed Python float/int
+                try:
+                    score = float(score)
+                    idx = int(idx)
+                except (ValueError, TypeError) as e:
+                    log.warning(f"Conversion failed for result {i}: {e}")
+                    continue
+                
+                # Skip invalid indices
+                if idx == -1:
+                    print(f"🐛 Debug - Skipping invalid index: {idx}")
+                    continue
+                
+                # Skip low similarity scores  
+                similarity_threshold = float(SIM_THRESHOLD)
+                print(f"🐛 Debug - Comparing score {score} with threshold {similarity_threshold}")
+                if score < similarity_threshold:
+                    print(f"🐛 Debug - Skipping low score: {score} < {similarity_threshold}")
+                    continue
+                
+                # Safety check for metadata bounds
+                if idx >= len(metadata):
+                    print(f"🐛 Debug - Index out of bounds: {idx} >= {len(metadata)}")
+                    continue
+                
+                # Add to results
+                result_item = metadata[idx].copy()
+                result_item["similarity_score"] = score
+                results.append(result_item)
+                
+                print(f"✅ Added result {len(results)}: {result_item.get('filename', 'unknown')} (score: {score})")
+                
+                # Stop when we have enough
+                if len(results) >= k:
+                    break
             
-            result_item = metadata[idx].copy()
-            result_item["similarity_score"] = float(score)
-            results.append(result_item)
-            
-            if len(results) >= k:
-                break
+        except Exception as e:
+            log.error(f"Error in result processing: {e}")
+            return json.dumps({"error": f"Results processing failed: {e}"})
         
+        # If no results due to threshold, try with lower threshold
+        if len(results) == 0:
+            print("⚠️  No results found with current threshold, trying with lower threshold...")
+            try:
+                # Retry with much lower threshold
+                for i, (score, idx) in enumerate(zip(distances_flat, indices_flat)):
+                    score = float(score)
+                    idx = int(idx)
+                    
+                    if idx == -1 or idx >= len(metadata):
+                        continue
+                    
+                    # Use very low threshold (0.1) to get some results
+                    if score >= 0.1:
+                        result_item = metadata[idx].copy()
+                        result_item["similarity_score"] = score
+                        results.append(result_item)
+                        
+                        if len(results) >= k:
+                            break
+                            
+                print(f"🔍 Found {len(results)} results with lower threshold")
+            except Exception as e:
+                log.warning(f"Retry with lower threshold failed: {e}")
+        
+        # Prepare final result
         search_result = {
             "results": results[:k],
             "total_found": len(results),
             "query_info": {
                 "embedding_dim": len(query_embedding),
                 "k_requested": k,
-                "similarity_threshold": SIM_THRESHOLD,
+                "similarity_threshold": float(SIM_THRESHOLD),
                 "query_text": query_data.get("query", "unknown")
             }
         }

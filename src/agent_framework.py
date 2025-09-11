@@ -1,9 +1,11 @@
 """
 Custom agent framework powered by Ollama - 100% free and local
+FIXED: Proper query extraction and tool parameter handling
 """
 import json
 import logging
 import requests
+import re
 from typing import List, Dict, Any, Optional, Callable
 from dataclasses import dataclass
 
@@ -11,7 +13,7 @@ log = logging.getLogger(__name__)
 
 # Ollama configuration
 OLLAMA_BASE_URL = "http://localhost:11434"
-DEFAULT_MODEL = "llama3.2:3b"  # Fast, efficient model
+DEFAULT_MODEL = "llama3.2:3b"
 
 @dataclass
 class Task:
@@ -185,7 +187,7 @@ Remember:
 - For scanning images: use scan_images tool
 - For generating embeddings: use embed_batch tool with image_paths from context
 - For building index: use build_index tool with embeddings and metadata from context  
-- For parsing queries: use parse_query tool with the query text
+- For parsing queries: use parse_query tool with the query text extracted from the task
 - For similarity search: use similarity_search tool with embedding from context
 
 Think step by step and choose the right tool for this specific task."""
@@ -205,7 +207,7 @@ Think step by step and choose the right tool for this specific task."""
             
             # Execute the chosen tool
             if tool_name in self.tools:
-                return self._execute_tool(tool_name, parameters, context_data)
+                return self._execute_tool(tool_name, parameters, context_data, task)
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
                 
@@ -214,8 +216,8 @@ Think step by step and choose the right tool for this specific task."""
                 print(f"⚠️  LLM response not valid JSON, using fallback")
             return self._execute_with_fallback(task, context_data)
 
-    def _execute_tool(self, tool_name: str, parameters: Dict, context_data: Dict) -> str:
-        """Execute a specific tool with parameters."""
+    def _execute_tool(self, tool_name: str, parameters: Dict, context_data: Dict, task: Task) -> str:
+        """FIXED: Execute a specific tool with parameters."""
         tool = self.tools[tool_name]
         
         try:
@@ -243,7 +245,26 @@ Think step by step and choose the right tool for this specific task."""
                     return json.dumps({"error": "Missing embeddings or metadata in context"})
                     
             elif tool_name == "parse_query":
-                query = parameters.get("query", "")
+                # FIXED: Extract query from multiple sources
+                query = None
+                
+                # Try to get query from parameters first
+                query = parameters.get("query")
+                
+                # If not in parameters, extract from task description
+                if not query:
+                    query_match = re.search(r"query\s+'([^']+)'", task.description)
+                    if not query_match:
+                        query_match = re.search(r"'([^']+)'", task.description)
+                    if query_match:
+                        query = query_match.group(1)
+                
+                # Last resort: look for quoted text in task description
+                if not query:
+                    quoted_text = re.findall(r"'([^']+)'", task.description)
+                    if quoted_text:
+                        query = quoted_text
+                
                 if query:
                     return tool(query)
                 else:
@@ -261,27 +282,33 @@ Think step by step and choose the right tool for this specific task."""
             return json.dumps({"error": f"Tool execution failed: {str(e)}"})
 
     def _execute_with_fallback(self, task: Task, context_data: Dict) -> str:
-        """Fallback rule-based execution when Ollama is unavailable."""
+        """FIXED: Fallback rule-based execution when Ollama is unavailable."""
         
-        # Rule-based tool selection (same as before)
+        # Rule-based tool selection with improved query extraction
         if "crawler" in self.role.lower() or "scan" in task.description.lower():
             if 'scan_images' in self.tools:
                 return self.tools['scan_images']()
+                
         elif "processor" in self.role.lower() or "embed" in task.description.lower():
             if 'embed_batch' in self.tools and 'image_paths' in context_data:
                 return self.tools['embed_batch'](json.dumps(context_data))
+                
         elif "indexer" in self.role.lower() or "index" in task.description.lower():
             if 'build_index' in self.tools and 'embeddings' in context_data and 'metadata' in context_data:
                 return self.tools['build_index'](json.dumps({
                     "embeddings": context_data["embeddings"], 
                     "metadata": context_data["metadata"]
                 }))
+                
         elif "parser" in self.role.lower() or "parse" in task.description.lower():
             if 'parse_query' in self.tools:
-                import re
-                query_match = re.search(r"'([^']+)'", task.description)
+                # FIXED: Better query extraction for fallback
+                query_match = re.search(r"query\s+'([^']+)'", task.description)
+                if not query_match:
+                    query_match = re.search(r"'([^']+)'", task.description)
                 if query_match:
                     return self.tools['parse_query'](query_match.group(1))
+                    
         elif "matcher" in self.role.lower() or "similar" in task.description.lower():
             if 'similarity_search' in self.tools and 'embedding' in context_data:
                 return self.tools['similarity_search'](json.dumps(context_data))
