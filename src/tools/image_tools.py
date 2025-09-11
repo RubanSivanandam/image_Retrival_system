@@ -1,19 +1,17 @@
 """
-Scan directories, generate CLIP embeddings, derive visual metadata.
-FIXED: YOLO classification and robust error handling
+FIXED image processing tools with proper imports.
+REPLACES: src/tools/image_tools.py (Import Error Fix)
 """
 import json
 import os
 import logging
-import asyncio
 from pathlib import Path
 from typing import List, Optional
 import numpy as np
-from PIL import Image, ExifTags, ImageFile
+from PIL import Image, ImageFile
 from sklearn.cluster import KMeans
 import torch
 from transformers import CLIPProcessor, CLIPModel
-from src.config.settings import *
 
 # Enable loading of truncated images
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -32,6 +30,12 @@ def _initialize_models():
     
     if clip_model is None or clip_processor is None:
         try:
+            # Import settings with error handling
+            try:
+                from src.config.settings import CLIP_MODEL
+            except ImportError:
+                CLIP_MODEL = "openai/clip-vit-base-patch32"  # Fallback
+            
             log.info(f"Loading CLIP model: {CLIP_MODEL}")
             clip_model = CLIPModel.from_pretrained(CLIP_MODEL)
             clip_processor = CLIPProcessor.from_pretrained(CLIP_MODEL)
@@ -63,19 +67,25 @@ def _yolo_category(path: str) -> str:
         if yolo_model is None:
             try:
                 from ultralytics import YOLO
+                # Import YOLO_MODEL_URL with fallback
+                try:
+                    from src.config.settings import YOLO_MODEL_URL
+                except ImportError:
+                    YOLO_MODEL_URL = "https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.pt"
+                
                 yolo_model = YOLO(YOLO_MODEL_URL)
+                log.info("YOLO model loaded successfully")
             except Exception as e:
                 log.warning(f"YOLO model loading failed: {e}")
                 return "unknown"
             
         results = yolo_model(path, conf=0.4, verbose=False)
         
-        # FIXED: Proper results handling
+        # Process YOLO results
         if results and len(results) > 0:
-            result = results
-            # Check if result has boxes and they're not empty
+            result = results[0]
             if hasattr(result, 'boxes') and result.boxes is not None and len(result.boxes) > 0:
-                cls_idx = int(result.boxes.cls)
+                cls_idx = int(result.boxes.cls[0])
                 if hasattr(result, 'names') and cls_idx in result.names:
                     return result.names[cls_idx].lower()
                     
@@ -84,37 +94,52 @@ def _yolo_category(path: str) -> str:
         log.warning(f"YOLO classification failed for {path}: {e}")
         return "unknown"
 
-def _simple_category_from_filename(path: str) -> str:
-    """Simple category detection from filename as fallback."""
+def _intelligent_category_from_filename(path: str) -> str:
+    """Enhanced category detection from filename."""
     filename = Path(path).stem.lower()
     
-    # Garment categories
-    if any(word in filename for word in ['dress', 'gown', 'frock']):
-        return "dress"
-    elif any(word in filename for word in ['shirt', 'top', 'blouse', 'tee']):
-        return "shirt"  
-    elif any(word in filename for word in ['pants', 'jeans', 'trouser', 'jean']):
-        return "pants"
-    elif any(word in filename for word in ['skirt']):
-        return "skirt"
-    elif any(word in filename for word in ['jacket', 'coat', 'blazer']):
-        return "jacket"
-    elif any(word in filename for word in ['shoe', 'boot', 'sneaker']):
-        return "footwear"
-    else:
-        return "garment"
-
-def scan_images(directory: str = str(IMAGES_DIR)) -> str:
-    """
-    Scan directory recursively for supported image files.
+    # Detailed garment categories with better patterns
+    garment_patterns = {
+        "jacket": ["jacket", "coat", "parka", "bomber", "windbreaker", "puffer", "blazer"],
+        "dress": ["dress", "gown", "frock", "sundress", "maxi", "mini", "midi"],
+        "shirt": ["shirt", "blouse", "top", "tee", "polo", "button", "henley"],
+        "pants": ["pants", "jeans", "trouser", "jean", "chino", "khaki", "slack"],
+        "sweater": ["sweater", "jumper", "cardigan", "pullover", "hoodie", "sweatshirt"],
+        "skirt": ["skirt", "mini", "maxi", "pencil", "pleated"],
+        "shorts": ["short", "bermuda", "cargo"],
+        "outerwear": ["overcoat", "trench", "raincoat", "peacoat"],
+        "activewear": ["sport", "athletic", "gym", "yoga", "running", "track"]
+    }
     
-    Args:
-        directory (str): Path to directory to scan
-        
-    Returns:
-        str: JSON string containing list of image paths and total count
+    # Check for exact matches first
+    for category, patterns in garment_patterns.items():
+        if any(pattern in filename for pattern in patterns):
+            return category
+    
+    # Check for partial matches or common clothing terms
+    clothing_indicators = ["winter", "summer", "casual", "formal", "fashion", "wear", "clothing"]
+    if any(indicator in filename for indicator in clothing_indicators):
+        return "garment"
+    
+    # Default fallback
+    return "unknown"
+
+def scan_images(directory: str = None) -> str:
+    """
+    FIXED: Scan directory recursively for supported image files.
     """
     try:
+        # FIXED: Import settings with proper fallbacks
+        try:
+            from src.config.settings import IMAGES_DIR, SUPPORTED_EXTS
+        except ImportError:
+            # Fallback settings if import fails
+            IMAGES_DIR = Path("data/images")
+            SUPPORTED_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'}
+        
+        if directory is None:
+            directory = str(IMAGES_DIR)
+            
         directory_path = Path(directory)
         if not directory_path.exists():
             return json.dumps({"error": f"Directory does not exist: {directory}"})
@@ -143,12 +168,6 @@ def scan_images(directory: str = str(IMAGES_DIR)) -> str:
 def embed_batch(batch_json: str) -> str:
     """
     Generate CLIP embeddings and metadata for a batch of images.
-    
-    Args:
-        batch_json (str): JSON string with 'image_paths' key
-        
-    Returns:
-        str: JSON string with embeddings and metadata
     """
     try:
         # Initialize models
@@ -163,6 +182,12 @@ def embed_batch(batch_json: str) -> str:
         
         log.info(f"Processing {len(paths)} images")
         
+        # FIXED: Import settings with fallback
+        try:
+            from src.config.settings import IMG_MAX_SIZE
+        except ImportError:
+            IMG_MAX_SIZE = (512, 512)
+        
         embeddings = []
         metadata = []
         processed = 0
@@ -176,7 +201,7 @@ def embed_batch(batch_json: str) -> str:
                         img = img.convert('RGB')
                     
                     # Resize if too large
-                    if img.size > IMG_MAX_SIZE or img.size > IMG_MAX_SIZE:
+                    if img.size[0] > IMG_MAX_SIZE[0] or img.size[1] > IMG_MAX_SIZE[1]:
                         img.thumbnail(IMG_MAX_SIZE, Image.Resampling.LANCZOS)
                     
                     # Generate CLIP embedding
@@ -198,13 +223,13 @@ def embed_batch(batch_json: str) -> str:
                         "size_bytes": Path(path).stat().st_size if Path(path).exists() else 0
                     }
                     
-                    # FIXED: Use filename-based category detection first, YOLO as fallback
-                    category = _simple_category_from_filename(path)
-                    if category == "garment":  # Only use YOLO if filename detection fails
+                    # FIXED: Enhanced category detection (filename first, then YOLO as fallback)
+                    category = _intelligent_category_from_filename(path)
+                    if category == "unknown":  # Only use YOLO if filename detection fails
                         category = _yolo_category(path)
                     meta["category"] = category
                     
-                    # FIXED: Ensure embedding is a simple list
+                    # Ensure embedding is a simple list
                     embedding_list = embedding.squeeze().numpy().tolist()
                     
                     embeddings.append(embedding_list)
@@ -223,7 +248,7 @@ def embed_batch(batch_json: str) -> str:
         
         log.info(f"Successfully processed {len(embeddings)} images")
         
-        # FIXED: Return clean data structure
+        # Return clean data structure
         return json.dumps({
             "embeddings": embeddings,  # List of lists
             "metadata": metadata,      # List of dicts  

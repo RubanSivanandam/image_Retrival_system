@@ -22,7 +22,7 @@ def check_ollama():
 
 def main():
     print("🤖 AI-Powered Garment Image Retrieval System")
-    print("Powered by Ollama - 100% Free and Local")
+    print("Powered by Ollama - Running in Local")
     print("=" * 50)
     
     # Check Ollama availability
