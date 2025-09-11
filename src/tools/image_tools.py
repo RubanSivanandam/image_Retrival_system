@@ -1,6 +1,6 @@
 """
 Scan directories, generate CLIP embeddings, derive visual metadata.
-Handles random filenames by inspecting EXIF first, then YOLOv8 if needed.
+FIXED: YOLO classification and robust error handling
 """
 import json
 import os
@@ -44,34 +44,37 @@ def _dominant_colours(arr: np.ndarray, k: int = 4) -> List[str]:
     """Extract dominant colors from image array."""
     try:
         pixels = arr.reshape(-1, 3)
-        # Handle edge case where image has fewer pixels than clusters
-        k = min(k, len(pixels))
+        k = min(k, len(pixels), 10)  # Reasonable limit
         if k <= 0:
-            return ["#000000"]
+            return ["#808080"]
             
         kmeans = KMeans(n_clusters=k, n_init="auto", random_state=42).fit(pixels)
         centers = kmeans.cluster_centers_.astype(int)
         return [f"#{r:02x}{g:02x}{b:02x}" for r, g, b in centers]
     except Exception as e:
         log.warning(f"Color extraction failed: {e}")
-        return ["#000000"]
+        return ["#808080"]
 
 def _yolo_category(path: str) -> str:
-    """Determine image category using YOLO (fallback implementation)."""
+    """FIXED: Determine image category using YOLO with proper error handling."""
     global yolo_model
     
     try:
         if yolo_model is None:
-            from ultralytics import YOLO
-            # Use standard YOLOv8 model instead of custom garment model
-            yolo_model = YOLO(YOLO_MODEL_URL)
+            try:
+                from ultralytics import YOLO
+                yolo_model = YOLO(YOLO_MODEL_URL)
+            except Exception as e:
+                log.warning(f"YOLO model loading failed: {e}")
+                return "unknown"
             
         results = yolo_model(path, conf=0.4, verbose=False)
         
+        # FIXED: Proper results handling
         if results and len(results) > 0:
             result = results
-            if result.boxes is not None and len(result.boxes) > 0:
-                # Get the class with highest confidence
+            # Check if result has boxes and they're not empty
+            if hasattr(result, 'boxes') and result.boxes is not None and len(result.boxes) > 0:
                 cls_idx = int(result.boxes.cls)
                 if hasattr(result, 'names') and cls_idx in result.names:
                     return result.names[cls_idx].lower()
@@ -81,7 +84,25 @@ def _yolo_category(path: str) -> str:
         log.warning(f"YOLO classification failed for {path}: {e}")
         return "unknown"
 
-# --------- TOOL FUNCTIONS (NO DECORATORS) --------------------------------
+def _simple_category_from_filename(path: str) -> str:
+    """Simple category detection from filename as fallback."""
+    filename = Path(path).stem.lower()
+    
+    # Garment categories
+    if any(word in filename for word in ['dress', 'gown', 'frock']):
+        return "dress"
+    elif any(word in filename for word in ['shirt', 'top', 'blouse', 'tee']):
+        return "shirt"  
+    elif any(word in filename for word in ['pants', 'jeans', 'trouser', 'jean']):
+        return "pants"
+    elif any(word in filename for word in ['skirt']):
+        return "skirt"
+    elif any(word in filename for word in ['jacket', 'coat', 'blazer']):
+        return "jacket"
+    elif any(word in filename for word in ['shoe', 'boot', 'sneaker']):
+        return "footwear"
+    else:
+        return "garment"
 
 def scan_images(directory: str = str(IMAGES_DIR)) -> str:
     """
@@ -177,27 +198,20 @@ def embed_batch(batch_json: str) -> str:
                         "size_bytes": Path(path).stat().st_size if Path(path).exists() else 0
                     }
                     
-                    # Try to get category from EXIF first
-                    try:
-                        exif = img.getexif()
-                        if exif:
-                            desc = ""
-                            for tag_id, value in exif.items():
-                                tag = ExifTags.TAGS.get(tag_id, tag_id)
-                                if tag == "ImageDescription":
-                                    desc = str(value).lower()
-                                    break
-                            meta["category"] = desc if desc else _yolo_category(path)
-                        else:
-                            meta["category"] = _yolo_category(path)
-                    except Exception:
-                        meta["category"] = _yolo_category(path)
+                    # FIXED: Use filename-based category detection first, YOLO as fallback
+                    category = _simple_category_from_filename(path)
+                    if category == "garment":  # Only use YOLO if filename detection fails
+                        category = _yolo_category(path)
+                    meta["category"] = category
                     
-                    embeddings.append(embedding.squeeze().numpy())
+                    # FIXED: Ensure embedding is a simple list
+                    embedding_list = embedding.squeeze().numpy().tolist()
+                    
+                    embeddings.append(embedding_list)
                     metadata.append(meta)
                     processed += 1
                     
-                    if processed % 10 == 0:
+                    if processed % 5 == 0:
                         log.info(f"Processed {processed}/{len(paths)} images")
                         
             except Exception as e:
@@ -207,14 +221,12 @@ def embed_batch(batch_json: str) -> str:
         if not embeddings:
             return json.dumps({"error": "No images could be processed"})
         
-        # Stack embeddings
-        embeddings_array = np.stack(embeddings)
-        
         log.info(f"Successfully processed {len(embeddings)} images")
         
+        # FIXED: Return clean data structure
         return json.dumps({
-            "embeddings": embeddings_array.tolist(),
-            "metadata": metadata,
+            "embeddings": embeddings,  # List of lists
+            "metadata": metadata,      # List of dicts  
             "processed_count": len(embeddings),
             "total_attempted": len(paths)
         })
