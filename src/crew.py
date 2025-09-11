@@ -1,5 +1,5 @@
 """
-Main crew orchestrator using free agent framework.
+Main CrewAI orchestrator for the image retrieval system using Ollama.
 """
 import logging
 from .agent_framework import Crew, Task
@@ -10,26 +10,41 @@ from .agents.query_parser import parser
 from .agents.similarity_matcher import matcher
 from .config.settings import *
 
+# Configure logging
 log = logging.getLogger(__name__)
 
 class RetrievalCrew:
-    """Main orchestrator class using free agents."""
+    """
+    Main orchestrator class for the image retrieval system.
+    Manages both index building and search operations using AI agents.
+    """
     
     def __init__(self, img_dir: str = str(IMAGES_DIR)):
+        """
+        Initialize the retrieval crew.
+        
+        Args:
+            img_dir (str): Path to the images directory
+        """
         self.img_dir = img_dir
         log.info(f"Initialized RetrievalCrew with image directory: {img_dir}")
     
     def build_index(self):
-        """Build the image index using free agent crew."""
+        """
+        Build the image index using AI-powered agents.
+        
+        Returns:
+            str: Result of the index building process
+        """
         try:
-            log.info("Starting index building process...")
+            log.info("Starting AI-powered index building process...")
             
             # Create agents
             crawler_agent = crawler()
             processor_agent = processor()
             indexer_agent = indexer()
             
-            # Define tasks
+            # Define tasks for index building
             crawl_task = Task(
                 description=f"Scan the directory {self.img_dir} and find all supported image files. Return a JSON list of image paths with total count.",
                 expected_output="JSON list of image paths with total count",
@@ -50,7 +65,7 @@ class RetrievalCrew:
                 context=[embed_task]
             )
             
-            # Create and execute crew
+            # Create and execute the indexing crew
             indexing_crew = Crew(
                 agents=[crawler_agent, processor_agent, indexer_agent],
                 tasks=[crawl_task, embed_task, index_task],
@@ -66,9 +81,17 @@ class RetrievalCrew:
             raise RuntimeError(f"Failed to build index: {e}")
     
     def search(self, query: str):
-        """Search for images using free agent crew."""
+        """
+        Search for images similar to the given query using AI agents.
+        
+        Args:
+            query (str): Natural language search query
+            
+        Returns:
+            str: JSON string with search results
+        """
         try:
-            log.info(f"Starting search for query: '{query}'")
+            log.info(f"Starting AI-powered search for query: '{query}'")
             
             if not query.strip():
                 raise ValueError("Empty search query")
@@ -77,7 +100,7 @@ class RetrievalCrew:
             parser_agent = parser()
             matcher_agent = matcher()
             
-            # Define tasks
+            # Define tasks for search
             parse_task = Task(
                 description=f"Parse the natural language query '{query}' and convert it to a CLIP text embedding with extracted semantic features.",
                 expected_output="JSON with query embedding and extracted features",
@@ -91,11 +114,11 @@ class RetrievalCrew:
                 context=[parse_task]
             )
             
-            # Create and execute crew
+            # Create and execute the search crew
             search_crew = Crew(
                 agents=[parser_agent, matcher_agent],
                 tasks=[parse_task, search_task],
-                verbose=False
+                verbose=True
             )
             
             result = search_crew.kickoff()

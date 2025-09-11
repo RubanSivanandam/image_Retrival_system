@@ -1,15 +1,9 @@
 """
-Tool modules for the image retrieval system.
+CrewAI Garment Image Retrieval System
+
+An AI-powered multi-agent system for searching and retrieving garment images using 
+CLIP embeddings, FAISS similarity search, and Ollama for intelligent reasoning.
 """
 
-from .image_tools import scan_images, embed_batch
-from .search_tools import parse_query
-from .vector_tools import build_index, similarity_search
-
-__all__ = [
-    "scan_images",
-    "embed_batch", 
-    "parse_query",
-    "build_index",
-    "similarity_search"
-]
+__version__ = "2.0.0"
+__author__ = "RubanSivanandam"
